@@ -7,18 +7,18 @@
  * Released under the MIT License
  * ============================================================ */
 
-var NodeBittrexApi = function () {
+let NodeBittrexApi = function (options) {
     'use strict';
 
-    var request = require('request'),
+    let request = require('request'),
         assign = require('object-assign'),
-        hmac_sha512 = require('./hmac-sha512.js'),
+        crypto = require('crypto'),
         jsonic = require('jsonic'),
         signalR = require('signalr-client'),
         wsclient,
         cloudscraper = require('cloudscraper');
 
-    var default_request_options = {
+    let default_request_options = {
         method: 'GET',
         agent: false,
         headers: {
@@ -27,7 +27,7 @@ var NodeBittrexApi = function () {
         }
     };
 
-    var opts = {
+    let opts = {
         baseUrl: 'https://bittrex.com/api/v1.1',
         baseUrlv2: 'https://bittrex.com/Api/v2.0',
         websockets_baseurl: 'wss://socket.bittrex.com/signalr',
@@ -43,10 +43,10 @@ var NodeBittrexApi = function () {
         requestTimeoutInSeconds: 15,
     };
 
-    var lastNonces = [];
+    let lastNonces = [];
 
-    var getNonce = function () {
-        var nonce = new Date().getTime();
+    let getNonce = function () {
+        let nonce = new Date().getTime();
 
         if (lastNonces.indexOf(nonce) > -1) {
             // we already used this nonce so keep trying to get a new one.
@@ -61,16 +61,20 @@ var NodeBittrexApi = function () {
         return nonce;
     };
 
-    var extractOptions = function (options) {
-        var o = Object.keys(options),
+    let extractOptions = function (options) {
+        let o = Object.keys(options),
             i;
         for (i = 0; i < o.length; i++) {
             opts[o[i]] = options[o[i]];
         }
     };
 
-    var apiCredentials = function (uri) {
-        var options = {
+    if(options) {
+        extractOptions(options);
+    }
+
+    let apiCredentials = function (uri) {
+        let options = {
             apikey: opts.apikey,
             nonce: getNonce()
         };
@@ -78,8 +82,8 @@ var NodeBittrexApi = function () {
         return setRequestUriGetParams(uri, options);
     };
 
-    var setRequestUriGetParams = function (uri, options) {
-        var op;
+    let setRequestUriGetParams = function (uri, options) {
+        let op;
         if (typeof(uri) === 'object') {
             op = uri;
             uri = op.uri;
@@ -88,22 +92,22 @@ var NodeBittrexApi = function () {
         }
 
 
-        var o = Object.keys(options),
+        let o = Object.keys(options),
             i;
         for (i = 0; i < o.length; i++) {
             uri = updateQueryStringParameter(uri, o[i], options[o[i]]);
         }
 
-        op.headers.apisign = hmac_sha512.HmacSHA512(uri, opts.apisecret); // setting the HMAC hash `apisign` http header
+        op.headers.apisign = crypto.createHmac('sha512', opts.apisecret).update(uri).digest('hex');
         op.uri = uri;
         op.timeout = opts.requestTimeoutInSeconds * 1000;
 
         return op;
     };
 
-    var updateQueryStringParameter = function (uri, key, value) {
-        var re = new RegExp("([?&])" + key + "=.*?(&|$)", "i");
-        var separator = uri.indexOf('?') !== -1 ? "&" : "?";
+    let updateQueryStringParameter = function (uri, key, value) {
+        let re = new RegExp("([?&])" + key + "=.*?(&|$)", "i");
+        let separator = uri.indexOf('?') !== -1 ? "&" : "?";
 
         if (uri.match(re)) {
             uri = uri.replace(re, '$1' + key + "=" + value + '$2');
@@ -114,13 +118,13 @@ var NodeBittrexApi = function () {
         return uri;
     };
 
-    var sendRequestCallback = function (callback, op) {
-        var start = Date.now();
+    let sendRequestCallback = function (callback, op) {
+        let start = Date.now();
 
         request(op, function (error, result, body) {
             ((opts.verbose) ? console.log("requested from " + op.uri + " in: %ds", (Date.now() - start) / 1000) : '');
             if (!body || !result || result.statusCode != 200) {
-                var errorObj = {
+                let errorObj = {
                     success: false,
                     message: 'URL request error',
                     error: error,
@@ -147,27 +151,27 @@ var NodeBittrexApi = function () {
         });
     };
 
-    var publicApiCall = function (url, callback, options) {
-        var op = assign({}, default_request_options);
+    let publicApiCall = function (url, callback, options) {
+        let op = assign({}, default_request_options);
         if (!options) {
             op.uri = url;
         }
         sendRequestCallback(callback, (!options) ? op : setRequestUriGetParams(url, options));
     };
 
-    var credentialApiCall = function (url, callback, options) {
+    let credentialApiCall = function (url, callback, options) {
         if (options) {
             options = setRequestUriGetParams(apiCredentials(url), options);
         }
         sendRequestCallback(callback, options);
     };
 
-    var websocketGlobalTickers = false;
-    var websocketGlobalTickerCallback;
-    var websocketMarkets = [];
-    var websocketMarketsCallback;
+    let websocketGlobalTickers = false;
+    let websocketGlobalTickerCallback;
+    let websocketMarkets = [];
+    let websocketMarketsCallback;
 
-    var connectws = function (callback, force) {
+    let connectws = function (callback, force) {
         if (opts.verbose) {
             console.log('connectws: wsclient=' + !!wsclient + ' force=' + !!force);
         }
@@ -300,10 +304,10 @@ var NodeBittrexApi = function () {
         return wsclient;
     };
 
-    var setMessageReceivedWs = function () {
+    let setMessageReceivedWs = function () {
         wsclient.serviceHandlers.messageReceived = function (message) {
             try {
-                var data = jsonic(message.utf8Data);
+                let data = jsonic(message.utf8Data);
                 if (data && data.M) {
                     data.M.forEach(function (M) {
                         if (websocketGlobalTickerCallback) {
@@ -353,7 +357,7 @@ var NodeBittrexApi = function () {
             }
         },
         sendCustomRequest: function (request_string, callback, credentials) {
-            var op;
+            let op;
 
             if (credentials === true) {
                 op = apiCredentials(request_string);
@@ -435,6 +439,6 @@ var NodeBittrexApi = function () {
             credentialApiCall(opts.baseUrl + '/account/withdraw', callback, options);
         }
     };
-}();
+};
 
-module.exports = NodeBittrexApi;
+module.exports.createInstance = NodeBittrexApi;
