@@ -290,6 +290,17 @@ let NodeBittrexApi = function (options) {
                                     if (result === true) {
                                         ((opts.verbose) ? console.log('Subscribed to ' + market) : '');
                                     }
+                                    wsclient.call('CoreHub', 'QueryExchangeState', market).done(function(err, result) {
+                                        if (err) {
+                                            return console.error(err);
+                                        }
+                                        let data = {
+                                            M: 'entireOrderbook',
+                                            market: market,
+                                            result: result
+                                        }
+                                        websocketMarketsCallback(data, wsclient);
+                                    });
                                 });
                             });
                         }
